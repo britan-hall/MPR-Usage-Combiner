@@ -4,9 +4,15 @@ Combine the `Usage` / `Usage (Part B)` tabs from many MPR Excel files into **one
 
 ## Quick start
 
-1) Put MPR files in `data/input/` (subfolders are OK).
+1) Create the data folders:
 
-2) Run:
+```bash
+mkdir -p data/input data/output
+```
+
+2) Put MPR files in `data/input/` (subfolders are OK).
+
+3) Run:
 
 ```bash
 ./scripts/run.sh
