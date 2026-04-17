@@ -1,66 +1,69 @@
 # MPR Combiner (Usage Tab)
 
-Combine the `Usage` / `Usage (Part B)` tabs from many MPR Excel files into **one combined Excel file**.
+Combine the `Usage` or `Usage (Part B)` sheets from many MPR Excel files into **one combined workbook**.
 
 ## Quick start
 
-1) Create the data folders:
+1. Create the data folders:
 
 ```bash
 mkdir -p data/input data/output
 ```
 
-2) Put MPR files in `data/input/` (subfolders are OK).
+2. Copy your MPR Excel files into `data/input/` (subfolders are fine).
 
-3) Run:
+3. Run:
 
 ```bash
 ./scripts/run.sh
 ```
 
-Output:
+**Output** (when you don’t pass `--output`):
 
-- `data/output/combined-usage.xlsx`
+- Writes to `data/output/` using: `99_<STATE>_<QUARTER>.xlsx`  
+  Example: `99_AL_Q4.xlsx`
+- **State**: taken from the `State` column; if more than one state appears, the name uses `MULTI`; if none, `UNKNOWN`.
+- **Quarter**: inferred from `Report Month` when present; otherwise from filenames like `...-2025-10-...`. Pass `--output path/to/file.xlsx` to choose the path yourself.
 
-## Next step (Excel Copilot prompt)
+## Next step — Excel Copilot
 
-Use this prompt in Excel Copilot to format the combined sheet for upload:
+Paste the block below into Excel Copilot to clean the combined sheet for upload:
 
 ```text
-Delete any completely empty rows (rows where most cells are blank).
+1. Delete rows that are empty or nearly empty (no meaningful data in most cells).
 
-Move rows with missing Processor IDs to a separate sheet called "Missing Processor ID" (keep only rows with valid Processor IDs in the main Usage sheet).
+2. Move rows with a missing Processor ID to a new sheet named "Missing Processor ID". Leave only rows with a valid Processor ID on the main Usage sheet.
 
-Delete the 'COOP' column (if it exists).
+3. Remove the COOP column if it exists.
 
-Update the 'Recipient Agency Number' column by combining the 'State' column, a dash '-', and the current RA number. Analyze the existing RA numbers in the sheet to learn the standard number length for this state, and pad the numbers with leading zeros to match that length before combining.
+4. Set Recipient Agency Number to: State + "-" + RA number (digits only). For each state, look at existing RA numbers in the sheet, infer the usual digit length for that state, and left-pad the RA with zeros to that length before combining with State and the dash.
 
-Remove ',' from any number formatting
+5. Strip thousands separators: remove comma characters from numbers (e.g. "1,234" → 1234).
 
-Change '()' from any number formatting to a negative number
+6. Treat parentheses as negative numbers: replace accounting-style "(123)" with -123.
 
-Keep only these columns in this exact order: Processor ID, Processor Name, Report Month, Report Year, State, Recipient Agency Number, Recipient Agency Name, Product Number, Product Name, USDA Material, EPDS DF, Case Qty, Used LBS.
+7. Normalize month names to numbers where needed (e.g. "December" → 12).
+
+8. Keep only these columns, in this exact order:
+Processor ID, Processor Name, Report Month, Report Year, State, Recipient Agency Number, Recipient Agency Name, Product Number, Product Name, USDA Material, EPDS DF, Case Qty, Used LBS.
 ```
 
 ## Notes
 
-- **Sheet selection**: tries `Usage`, otherwise falls back to `Usage (Part B)`
-- **Headers**: normalizes common header variations/broken headers
-- **Need troubleshooting?** Run with `--diagnose true`
+- **Sheet selection**: uses `Usage` if present; otherwise `Usage (Part B)`.
+- **Headers**: common typos and broken spacing in column names are normalized.
+- **Troubleshooting**: run with `--diagnose true` to see per-file extraction details.
 
 ## Options
 
-These are the available CLI switches (you can pass them to `./scripts/run.sh ...`).
+Pass these to `./scripts/run.sh` or to `java -jar ...` after `--`.
 
-- **`--input`** (required): input folder of Excel files  
-  - Example: `--input "data/input"`
-- **`--output`** (required): output file path  
-  - Use `.xlsx` for Excel output, `.csv` for CSV output
-- **`--recursive`** (default `false`): scan subfolders  
-  - Note: `./scripts/run.sh` already sets `--recursive true`
-- **`--sheet`** (default `Usage`): sheet name to extract  
-  - If `Usage` isn’t found, it automatically falls back to `Usage (Part B)`
-- **`--headerRow`** (default `1`): 1-based header row index in the sheet
-- **`--includeSource`** (default `false`): include `__source_file`, `__source_sheet`, `__source_row` columns
-- **`--diagnose`** (default `false`): print per-file extraction stats and skip reasons
-
+| Switch | Meaning |
+|--------|---------|
+| `--input` | **Required** unless you rely on the script default (`data/input`). Folder containing `.xlsx` / `.xlsm` / `.xls` files. |
+| `--output` | **Optional.** Output file (`.xlsx` or `.csv`). If omitted, see **Output** above. |
+| `--recursive` | `true` \| `false` — include subfolders. The script sets `true` by default. |
+| `--sheet` | Sheet name to read (default `Usage`; fallback to `Usage (Part B)` when appropriate). |
+| `--headerRow` | 1-based row index of the header row (default `1`). |
+| `--includeSource` | `true` to add `__source_file`, `__source_sheet`, `__source_row` columns. |
+| `--diagnose` | `true` to print extraction stats and skip reasons to stderr. |
