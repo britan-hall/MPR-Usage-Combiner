@@ -102,7 +102,7 @@ public final class MPRCombiner {
                     filesSkippedNoSheet++;
                     if (diagnose) {
                         System.err.println("[diagnose] No sheet match in " + excelPath.getFileName()
-                                + " (looking for '" + sheetName + "'" + sheetFallbackNote(sheetName) + "). Sheets: " + listSheetNames(wb));
+                                + " (looking for '" + sheetName + "'" + sheetFallbackNote(sheetName) + "). Sheets: " + MPRUtil.listSheetNames(wb));
                     }
                     continue;
                 }
@@ -182,7 +182,7 @@ public final class MPRCombiner {
         outputColumns.addAll(unifiedColumns);
 
         Files.createDirectories(outputFile.getParent() == null ? Paths.get(".") : outputFile.getParent());
-        if (isXlsxOutput(outputFile)) {
+        if (MPRUtil.isXlsxOutput(outputFile)) {
             writeXlsx(outputFile, outputColumns, allRows);
         } else {
             writeCsv(outputFile, outputColumns, allRows);
@@ -256,7 +256,7 @@ public final class MPRCombiner {
     }
 
     private static Sheet findSheetByName(Workbook wb, String targetName) {
-        String normTarget = normalizeSheetName(targetName);
+        String normTarget = MPRUtil.normalizeSheetName(targetName);
         if (normTarget.isEmpty()) return null;
 
         Sheet exact = wb.getSheet(targetName);
@@ -264,7 +264,7 @@ public final class MPRCombiner {
         for (int i = 0; i < wb.getNumberOfSheets(); i++) {
             Sheet s = wb.getSheetAt(i);
             if (s == null || s.getSheetName() == null) continue;
-            String normSheet = normalizeSheetName(s.getSheetName());
+            String normSheet = MPRUtil.normalizeSheetName(s.getSheetName());
             if (!normSheet.isEmpty() && normSheet.equalsIgnoreCase(normTarget)) {
                 return s;
             }
@@ -278,7 +278,7 @@ public final class MPRCombiner {
 
         // Option A: if the user is asking for the default Usage sheet and it doesn't exist,
         // fall back to "Usage (Part B)" which is common in other MPR templates.
-        String normRequested = normalizeSheetName(requestedSheetName);
+        String normRequested = MPRUtil.normalizeSheetName(requestedSheetName);
         if (normRequested.equalsIgnoreCase("Usage")) {
             return findSheetByName(wb, "Usage (Part B)");
         }
@@ -286,45 +286,11 @@ public final class MPRCombiner {
     }
 
     private static String sheetFallbackNote(String requestedSheetName) {
-        String normRequested = normalizeSheetName(requestedSheetName);
+        String normRequested = MPRUtil.normalizeSheetName(requestedSheetName);
         if (normRequested.equalsIgnoreCase("Usage")) {
             return " or 'Usage (Part B)'";
         }
         return "";
-    }
-
-    private static String normalizeSheetName(String s) {
-        if (s == null) return "";
-        String t = s.trim();
-        if (t.isEmpty()) return "";
-        // Collapse all internal whitespace to a single space
-        StringBuilder b = new StringBuilder(t.length());
-        boolean lastWasSpace = false;
-        for (int i = 0; i < t.length(); i++) {
-            char ch = t.charAt(i);
-            boolean isSpace = Character.isWhitespace(ch);
-            if (isSpace) {
-                if (!lastWasSpace) {
-                    b.append(' ');
-                    lastWasSpace = true;
-                }
-            } else {
-                b.append(ch);
-                lastWasSpace = false;
-            }
-        }
-        return b.toString();
-    }
-
-    private static String listSheetNames(Workbook wb) {
-        List<String> names = new ArrayList<>();
-        for (int i = 0; i < wb.getNumberOfSheets(); i++) {
-            Sheet s = wb.getSheetAt(i);
-            if (s != null && s.getSheetName() != null) {
-                names.add("'" + s.getSheetName() + "'");
-            }
-        }
-        return String.join(", ", names);
     }
 
     private static Map<Integer, String> readHeader(Row headerRow, DataFormatter formatter) {
@@ -357,7 +323,7 @@ public final class MPRCombiner {
         s = s.trim();
         if (s.isEmpty()) return null;
 
-        String key = toHeaderKey(s);
+        String key = MPRUtil.toHeaderKey(s);
         if (!key.isEmpty()) {
             String canonical = CANONICAL_HEADERS.get(key);
             if (canonical != null) return canonical;
@@ -369,7 +335,7 @@ public final class MPRCombiner {
         }
 
         // Fall back to a cleaned version of whatever we got.
-        return collapseWhitespace(s);
+        return MPRUtil.collapseWhitespace(s);
     }
 
     private static Map<String, String> buildCanonicalHeaderMap() {
@@ -397,44 +363,10 @@ public final class MPRCombiner {
     }
 
     private static void putCanonical(Map<String, String> m, String canonical, String... variants) {
-        m.put(toHeaderKey(canonical), canonical);
+        m.put(MPRUtil.toHeaderKey(canonical), canonical);
         for (String v : variants) {
-            m.put(toHeaderKey(v), canonical);
+            m.put(MPRUtil.toHeaderKey(v), canonical);
         }
-    }
-
-    private static String toHeaderKey(String s) {
-        if (s == null) return "";
-        String t = collapseWhitespace(s).toLowerCase(Locale.ROOT);
-        StringBuilder b = new StringBuilder(t.length());
-        for (int i = 0; i < t.length(); i++) {
-            char ch = t.charAt(i);
-            if ((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')) {
-                b.append(ch);
-            }
-        }
-        return b.toString();
-    }
-
-    private static String collapseWhitespace(String s) {
-        if (s == null) return "";
-        String t = s.trim();
-        StringBuilder b = new StringBuilder(t.length());
-        boolean lastWasSpace = false;
-        for (int i = 0; i < t.length(); i++) {
-            char ch = t.charAt(i);
-            boolean isSpace = Character.isWhitespace(ch);
-            if (isSpace) {
-                if (!lastWasSpace) {
-                    b.append(' ');
-                    lastWasSpace = true;
-                }
-            } else {
-                b.append(ch);
-                lastWasSpace = false;
-            }
-        }
-        return b.toString();
     }
 
     private static boolean isRowEmpty(Row row) {
@@ -465,14 +397,9 @@ public final class MPRCombiner {
         }
     }
 
-    private static boolean isXlsxOutput(Path outputFile) {
-        String name = outputFile.getFileName() == null ? "" : outputFile.getFileName().toString();
-        return name.toLowerCase(Locale.ROOT).endsWith(".xlsx");
-    }
-
     private static void writeCsv(Path outputFile, List<String> columns, List<UsageRow> rows) throws IOException {
         try (BufferedWriter w = Files.newBufferedWriter(outputFile, StandardCharsets.UTF_8)) {
-            w.write(columns.stream().map(MPRCombiner::csvEscape).collect(Collectors.joining(",")));
+            w.write(columns.stream().map(MPRUtil::csvEscape).collect(Collectors.joining(",")));
             w.write("\n");
 
             for (UsageRow r : rows) {
@@ -493,7 +420,7 @@ public final class MPRCombiner {
                         vals.add(r.valuesByColumn.getOrDefault(col, ""));
                     }
                 }
-                w.write(vals.stream().map(MPRCombiner::csvEscape).collect(Collectors.joining(",")));
+                w.write(vals.stream().map(MPRUtil::csvEscape).collect(Collectors.joining(",")));
                 w.write("\n");
             }
         }
@@ -534,13 +461,6 @@ public final class MPRCombiner {
                 wb.write(os);
             }
         }
-    }
-
-    private static String csvEscape(String s) {
-        if (s == null) return "";
-        boolean needsQuotes = s.contains(",") || s.contains("\"") || s.contains("\n") || s.contains("\r");
-        if (!needsQuotes) return s;
-        return "\"" + s.replace("\"", "\"\"") + "\"";
     }
 
     private static final class UsageRow {
