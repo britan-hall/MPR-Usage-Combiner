@@ -20,10 +20,8 @@ mkdir -p data/input data/output
 
 **Output** (when you don’t pass `--output`):
 
-- Writes to `data/output/` using: `99_<STATE>_<QUARTER>.xlsx`  
-  Example: `99_AL_Q4.xlsx`
-- **State**: taken from the `State` column; if more than one state appears, the name uses `MULTI`; if none, `UNKNOWN`.
-- **Quarter**: inferred from `Report Month` when present; otherwise from filenames like `...-2025-10-...`. Pass `--output path/to/file.xlsx` to choose the path yourself.
+- Writes to `data/output/99_combined_usage.xlsx` (the `run.sh` default).
+- Pass `--output path/to/file.xlsx` to choose a different path or filename.
 
 ## Next step — Excel Copilot
 

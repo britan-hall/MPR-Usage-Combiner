@@ -7,7 +7,7 @@ cd "$ROOT_DIR"
 mvn -q -DskipTests package
 
 DEFAULT_INPUT="data/input"
-DEFAULT_OUTPUT="data/output/combined-usage.xlsx"
+DEFAULT_OUTPUT="data/output/99_combined_usage.xlsx"
 
 has_arg() {
   local needle="$1"
