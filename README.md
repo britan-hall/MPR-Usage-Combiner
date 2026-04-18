@@ -30,7 +30,7 @@ Paste the block below into Excel Copilot to clean the combined sheet for upload:
 ```text
 1. Delete rows that are empty or nearly empty (no meaningful data in most cells).
 
-2. Move rows with a missing Processor ID to a new sheet named "Missing Processor ID". Leave only rows with a valid Processor ID on the main Usage sheet.
+2. Move rows with a missing Processor ID to a new sheet named "Missing Processor ID". Leave only rows with a valid Processor ID on the main Usage sheet. (If a row is missing most of its data just remove it)
 
 3. Remove the COOP column if it exists.
 
