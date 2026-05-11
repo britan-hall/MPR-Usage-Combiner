@@ -1,4 +1,6 @@
 data/input/
 data/output/
 target/
+dist/
+/combined*.csv
 .DS_Store

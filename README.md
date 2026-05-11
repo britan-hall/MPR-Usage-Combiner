@@ -1,67 +1,47 @@
 # MPR Combiner (Usage Tab)
 
-Combine the `Usage` or `Usage (Part B)` sheets from many MPR Excel files into **one combined workbook**.
+Combine the `Usage` or `Usage (Part B)` sheets from many MPR Excel files into **one workbook** in the same folder you pick.
 
-## Quick start
+## Run the app (GUI)
 
-1. Create the data folders:
-
-```bash
-mkdir -p data/input data/output
-```
-
-2. Copy your MPR Excel files into `data/input/` (subfolders are fine).
-
-3. Run:
+**From the project folder in Terminal** (shortest):
 
 ```bash
-./scripts/run.sh
+./gui
 ```
 
-**Output** (when you don’t pass `--output`):
+**On a Mac**, you can double-click **`MPR Combiner.command`** in Finder (opens Terminal and starts the app).
 
-- Writes to `data/output/99_combined_usage.xlsx` (the `run.sh` default).
-- Pass `--output path/to/file.xlsx` to choose a different path or filename.
+The first launch runs Maven to build the JAR; later launches are quicker. Same as `./scripts/run.sh` if you prefer that path.
+
+Advanced (after you have built once with `mvn package`):
+
+```bash
+java -jar target/mpr-combiner-1.0.0-all.jar
+```
+
+**Company logo (optional):** Put your mark at `src/main/resources/branding/logo.png` or `logo.jpg`. It appears in the top header next to the title when you run the app. A PNG with a transparent background and roughly square or horizontal proportions works well (the UI scales it to a fixed height). To share the artwork with someone helping in Cursor, add that file in the repo or attach the image in chat.
+
+## What to do in the UI
+
+1. Use **Open library** (or **Browse…**) to point at the folder that contains your MPR workbooks (for example your synced OneDrive or SharePoint library). Pick the **Combine from** folder in the tree or path field.
+2. Turn **Search subfolders for workbooks** on or off depending on whether workbooks are nested.
+3. Click **Combine**. In **Output**, optionally set **Output file** or **Output folder**, choose whether to open the workbook and copy the Copilot prompt, then click **Combine** again to start.
+
+Files whose names start with `99_combined` and end with `.xlsx` are **not** read as inputs, so you can re-run a combine without pulling the last combined workbook into the next one.
 
 ## Next step — Excel Copilot
 
-Paste the block below into Excel Copilot to clean the combined sheet for upload:
+Excel does not offer a supported way for external apps to type into Copilot for you. The app can still help:
 
-```text
-1. Delete rows that are empty or nearly empty (no meaningful data in most cells).
+- In the **Output** dialog (after **Combine**), enable **Copy Copilot prompt to clipboard** (on by default) and optionally **Open workbook when finished**. After a successful run, paste into Copilot with **⌘V** (Mac) or **Ctrl+V** (Windows).
 
-2. Move rows with a missing Processor ID to a new sheet named "Missing Processor ID". Leave only rows with a valid Processor ID on the main Usage sheet. (If a row is missing most of its data just remove it)
-
-3. Remove the COOP column if it exists.
-
-4. Set Recipient Agency Number to: State + "-" + RA number (digits only). For each state, look at existing RA numbers in the sheet, infer the usual digit length for that state, and left-pad the RA with zeros to that length before combining with State and the dash.
-
-5. Strip thousands separators: remove comma characters from numbers (e.g. "1,234" → 1234).
-
-6. Treat parentheses as negative numbers: replace accounting-style "(123)" with -123.
-
-7. Normalize month names to numbers where needed (e.g. "December" → 12).
-
-8. Keep only these columns, in this exact order:
-Processor ID, Processor Name, Report Month, Report Year, State, Recipient Agency Number, Recipient Agency Name, Product Number, Product Name, USDA Material, EPDS DF, Case Qty, Used LBS.
-```
+The exact text lives in `src/main/resources/copilot-excel-prompt.txt` (bundled in the JAR). Open or copy from that file, or rely on the app’s clipboard option after combine, then paste into Excel Copilot.
 
 ## Notes
 
+- **Combine timeout**: a single combine run stops automatically after **15 minutes** (wall clock) so a stuck read (for example OneDrive/SharePoint files that are not fully synced yet) does not hang forever. Override with e.g. `java -Dmpr.combiner.timeoutMinutes=30 -jar …` if you routinely combine very large libraries.
+- **SharePoint / OneDrive**: sync the library to this computer, then choose that folder in the app. There is no Microsoft sign-in; files are read from disk only.
 - **Sheet selection**: uses `Usage` if present; otherwise `Usage (Part B)`.
 - **Headers**: common typos and broken spacing in column names are normalized.
-- **Troubleshooting**: run with `--diagnose true` to see per-file extraction details.
-
-## Options
-
-Pass these to `./scripts/run.sh` or to `java -jar ...` after `--`.
-
-| Switch | Meaning |
-|--------|---------|
-| `--input` | **Required** unless you rely on the script default (`data/input`). Folder containing `.xlsx` / `.xlsm` / `.xls` files. |
-| `--output` | **Optional.** Output file (`.xlsx` or `.csv`). If omitted, see **Output** above. |
-| `--recursive` | `true` \| `false` — include subfolders. The script sets `true` by default. |
-| `--sheet` | Sheet name to read (default `Usage`; fallback to `Usage (Part B)` when appropriate). |
-| `--headerRow` | 1-based row index of the header row (default `1`). |
-| `--includeSource` | `true` to add `__source_file`, `__source_sheet`, `__source_row` columns. |
-| `--diagnose` | `true` to print extraction stats and skip reasons to stderr. |
+- **Worksheet**: combines the `Usage` sheet (or `Usage (Part B)` when `Usage` is missing) with header row 1.

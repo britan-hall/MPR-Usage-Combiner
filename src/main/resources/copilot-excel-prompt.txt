@@ -1,0 +1,50 @@
+CLEAN UP USAGE DATA FILE - PROCESSING INSTRUCTIONS
+
+If a file has more than 25,000 data rows, work one Usage tab at a time (Usage1, Usage2, etc., each with up to 25,000 rows). 
+
+1. ROW CLEANING & FILTERING
+
+* Delete Empty Rows: Remove any rows that are completely blank or have data in fewer than 3 cells.
+* Missing Processor ID: Move rows missing a Processor ID to a new sheet called "Missing Processor ID".
+* For Cherry Central, the Processor ID is 1415-0024
+* Exception: If a row missing a Processor ID is also "mostly empty" (less than 3 cells), delete it instead of moving it.
+* Final Sweep: Delete any rows that are completely blank after all processing is finished.
+
+2. COLUMN & DATA REMOVAL
+
+* Remove COOP: Delete the "COOP" column if it exists in the file.
+
+3. RECIPIENT AGENCY (RA) NUMBER FORMATTING
+
+* Structure: Format as [State] + "-" + [RA Number].
+* Padding: Left-pad the RA number with zeros based on that state's typical digit length.
+* Prefix Validation: Never create double state prefixes (e.g., convert "IN-IN-1234" to "IN-1234").
+
+4. NUMBER & DATE FORMATTING
+
+* Remove Commas: Remove all thousand separators (e.g., "1,234" becomes 1234).
+* Negatives: Convert parentheses to negative numbers (e.g., "(123)" becomes -123).
+* Months: Convert full month names to numbers (e.g., "December" becomes 12).
+
+5. CALCULATIONS
+
+* Used LBS: Calculate as [EPDS DF] × [Case Qty].
+
+6. FINAL COLUMN SELECTION & ORDER
+Keep only these columns in this exact order:
+7. Processor ID
+8. Processor Name
+9. Report Month
+10. Report Year
+11. State
+12. Recipient Agency Number
+13. Recipient Agency Name
+14. Product Number
+15. Product Name
+16. USDA Material
+17. EPDS DF
+18. Case Qty
+19. Used LBS
+
+FINAL STEP:
+* After all tranfomations (IMPORTANT), delete any rows that are missing any values in any boxes

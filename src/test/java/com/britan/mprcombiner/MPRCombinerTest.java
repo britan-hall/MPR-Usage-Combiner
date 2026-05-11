@@ -14,8 +14,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.OptionalInt;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MPRCombinerTest {
@@ -39,10 +42,7 @@ public class MPRCombinerTest {
         });
 
         Path out = outDir.resolve("combined.csv");
-        MPRCombiner.main(new String[]{
-                "--input", inDir.toString(),
-                "--output", out.toString()
-        });
+        MPRCombiner.runLocalCombine(inDir, out, null, "Usage", 1, false, false, false);
 
         List<String> lines = readAllLinesUtf8(out);
         String header = lines.get(0);
@@ -62,7 +62,6 @@ public class MPRCombinerTest {
         Path out = tempDir.resolve("combined2.csv");
         Files.createDirectories(inDir);
 
-        // workbook with a different sheet name
         try (XSSFWorkbook wb = new XSSFWorkbook()) {
             wb.createSheet("NotUsage");
             try (OutputStream os = Files.newOutputStream(inDir.resolve("no-usage.xlsx"))) {
@@ -72,10 +71,7 @@ public class MPRCombinerTest {
 
         writeXlsx(inDir.resolve("has-usage.xlsx"), new String[]{"A"}, new String[][]{{"1"}});
 
-        MPRCombiner.main(new String[]{
-                "--input", inDir.toString(),
-                "--output", out.toString()
-        });
+        MPRCombiner.runLocalCombine(inDir, out, null, "Usage", 1, false, false, false);
 
         List<String> lines = readAllLinesUtf8(out);
         String csv = String.join("\n", lines);
@@ -99,10 +95,7 @@ public class MPRCombinerTest {
             }
         }
 
-        MPRCombiner.main(new String[]{
-                "--input", inDir.toString(),
-                "--output", out.toString()
-        });
+        MPRCombiner.runLocalCombine(inDir, out, null, "Usage", 1, false, false, false);
 
         List<String> lines = readAllLinesUtf8(out);
         String csv = String.join("\n", lines);
@@ -115,39 +108,99 @@ public class MPRCombinerTest {
         Path out = tempDir.resolve("headers.csv");
         Files.createDirectories(inDir);
 
-        // Deliberately broken spacing/punctuation/typo in the header name.
         writeXlsx(inDir.resolve("broken.xlsx"),
                 new String[]{"Processor ID", "Rport Mo.     nth", "Report Year"},
                 new String[][]{
                         {"P1", "10", "2025"}
                 });
 
-        MPRCombiner.main(new String[]{
-                "--input", inDir.toString(),
-                "--output", out.toString()
-        });
+        MPRCombiner.runLocalCombine(inDir, out, null, "Usage", 1, false, false, false);
 
         List<String> lines = readAllLinesUtf8(out);
         String header = lines.get(0);
         assertTrue(header.contains("Report Month"));
         String csv = String.join("\n", lines);
-        assertTrue(csv.contains(",10,")); // month value made it through
+        assertTrue(csv.contains(",10,"));
+    }
+
+    @Test
+    void autoNamesCombinedXlsxInInputFolderFromUsageMetadata() throws Exception {
+        Path inDir = tempDir.resolve("auto_name_in");
+        Files.createDirectories(inDir);
+        writeXlsx(inDir.resolve("m.xlsx"),
+                new String[]{"Processor ID", "Report Year", "State", "Report Month"},
+                new String[][]{{"P1", "2025", "IA", "2"}});
+
+        Path written = MPRCombiner.runLocalCombine(inDir, null, null, "Usage", 1, false, false, false);
+        Path expected = inDir.resolve("99_combinedUsage-2025-Q1-IA-MPR.xlsx").normalize();
+        assertEquals(expected, written.normalize());
+        assertTrue(Files.exists(written));
+    }
+
+    @Test
+    void autoNamedFileCanGoToSeparateOutputFolder() throws Exception {
+        Path inDir = tempDir.resolve("auto_in");
+        Path outDir = tempDir.resolve("auto_out");
+        Files.createDirectories(inDir);
+        Files.createDirectories(outDir);
+        writeXlsx(inDir.resolve("m.xlsx"),
+                new String[]{"Processor ID", "Report Year", "State", "Report Month"},
+                new String[][]{{"P1", "2025", "MN", "5"}});
+
+        Path written = MPRCombiner.runLocalCombine(inDir, null, outDir, "Usage", 1, false, false, false);
+        Path expected = outDir.resolve("99_combinedUsage-2025-Q2-MN-MPR.xlsx").normalize();
+        assertEquals(expected, written.normalize());
+        assertTrue(Files.exists(written));
+    }
+
+    @Test
+    void autoNameUniquifiesWhenFileExists() throws Exception {
+        Path inDir = tempDir.resolve("auto_name_dup");
+        Files.createDirectories(inDir);
+        Files.createFile(inDir.resolve("99_combinedUsage-2025-Q1-IA-MPR.xlsx"));
+        writeXlsx(inDir.resolve("m.xlsx"),
+                new String[]{"Processor ID", "Report Year", "State", "Report Month"},
+                new String[][]{{"P1", "2025", "IA", "2"}});
+
+        Path written = MPRCombiner.runLocalCombine(inDir, null, null, "Usage", 1, false, false, false);
+        assertEquals(inDir.resolve("99_combinedUsage-2025-Q1-IA-MPR_2.xlsx").normalize(), written.normalize());
+    }
+
+    @Test
+    void autoNamePrefersQuarterFromFolderPathOverReportMonth() throws Exception {
+        Path inDir = tempDir.resolve("my-Q3-batch").resolve("nested");
+        Files.createDirectories(inDir);
+        writeXlsx(inDir.resolve("m.xlsx"),
+                new String[]{"Processor ID", "Report Year", "State", "Report Month"},
+                new String[][]{{"P1", "2025", "FL", "2"}});
+
+        Path written = MPRCombiner.runLocalCombine(inDir, null, null, "Usage", 1, false, false, false);
+        assertEquals(inDir.resolve("99_combinedUsage-2025-Q3-FL-MPR.xlsx").normalize(), written.normalize());
+    }
+
+    @Test
+    void quarterFromPathSegmentFindsQuarterInSegment() {
+        assertEquals(OptionalInt.of(1), MPRCombiner.quarterFromPathSegment("Q1"));
+        assertEquals(OptionalInt.of(2), MPRCombiner.quarterFromPathSegment("prefix-Q2-suffix"));
+        assertEquals(OptionalInt.of(4), MPRCombiner.quarterFromPathSegment("batch_q4_done"));
+    }
+
+    @Test
+    void quarterFromPathSegmentIgnoresQ12() {
+        assertFalse(MPRCombiner.quarterFromPathSegment("Q12").isPresent());
     }
 
     static Stream<Arguments> headerVariants() {
         return Stream.of(
-                // Processor ID
                 Arguments.of("Processor ID", "Processor ID", "P1"),
                 Arguments.of("processor id", "Processor ID", "P1"),
                 Arguments.of("Processor   ID", "Processor ID", "P1"),
                 Arguments.of("Processor\nID", "Processor ID", "P1"),
 
-                // Processor Name
                 Arguments.of("Processor Name", "Processor Name", "Acme Foods"),
                 Arguments.of("processor name", "Processor Name", "Acme Foods"),
                 Arguments.of("Processor   Name", "Processor Name", "Acme Foods"),
 
-                // Report Month
                 Arguments.of("Report Month", "Report Month", "10"),
                 Arguments.of("Report Mo", "Report Month", "10"),
                 Arguments.of("Report Mo\tnth", "Report Month", "10"),
@@ -155,47 +208,37 @@ public class MPRCombinerTest {
                 Arguments.of("Rport Mo.     nth", "Report Month", "10"),
                 Arguments.of("Month", "Report Month", "10"),
 
-                // Report Year
                 Arguments.of("Report Year", "Report Year", "2025"),
                 Arguments.of("Year", "Report Year", "2025"),
                 Arguments.of("Report\nYear", "Report Year", "2025"),
 
-                // State
                 Arguments.of("State", "State", "AL"),
                 Arguments.of("ST", "State", "AL"),
 
-                // Recipient Agency Number
                 Arguments.of("Recipient Agency Number", "Recipient Agency Number", "AL-158"),
                 Arguments.of("RA Number", "Recipient Agency Number", "AL-158"),
                 Arguments.of("Recipient Agency #", "Recipient Agency Number", "AL-158"),
 
-                // Recipient Agency Name
                 Arguments.of("Recipient Agency Name", "Recipient Agency Name", "Hoover City"),
                 Arguments.of("RA Name", "Recipient Agency Name", "Hoover City"),
 
-                // Product Number
                 Arguments.of("Product Number", "Product Number", "1000002789"),
                 Arguments.of("Product Nbr", "Product Number", "1000002789"),
                 Arguments.of("Product #", "Product Number", "1000002789"),
 
-                // Product Name
                 Arguments.of("Product Name", "Product Name", "Tater Tots"),
                 Arguments.of("Product\nName", "Product Name", "Tater Tots"),
 
-                // USDA Material
                 Arguments.of("USDA Material", "USDA Material", "100506"),
                 Arguments.of("USDA", "USDA Material", "100506"),
 
-                // EPDS DF
                 Arguments.of("EPDS DF", "EPDS DF", "54.55"),
                 Arguments.of("DF", "EPDS DF", "54.55"),
 
-                // Case Qty
                 Arguments.of("Case Qty", "Case Qty", "12"),
                 Arguments.of("Cases", "Case Qty", "12"),
                 Arguments.of("Case Quantity", "Case Qty", "12"),
 
-                // Used LBS
                 Arguments.of("Used LBS", "Used LBS", "123.45"),
                 Arguments.of("Used Lbs.", "Used LBS", "123.45"),
                 Arguments.of("LBS Used", "Used LBS", "123.45")
@@ -213,16 +256,40 @@ public class MPRCombinerTest {
                 new String[]{rawHeader},
                 new String[][]{{value}});
 
-        MPRCombiner.main(new String[]{
-                "--input", inDir.toString(),
-                "--output", out.toString()
-        });
+        MPRCombiner.runLocalCombine(inDir, out, null, "Usage", 1, false, false, false);
 
         List<String> lines = readAllLinesUtf8(out);
         String header = lines.get(0);
         assertTrue(header.contains(expectedCanonical));
         String csv = String.join("\n", lines);
         assertTrue(csv.contains(value));
+    }
+
+    @Test
+    void usageSheetNamingWithinRowLimit() {
+        assertEquals(1, MPRCombiner.usageSheetChunkCount(25_000));
+        assertEquals("Usage", MPRCombiner.usageSheetName(0, 1));
+        assertEquals(2, MPRCombiner.usageSheetChunkCount(25_001));
+        assertEquals("Usage1", MPRCombiner.usageSheetName(0, 2));
+        assertEquals("Usage2", MPRCombiner.usageSheetName(1, 2));
+    }
+
+    @Test
+    void splitsCombinedXlsxIntoUsageNumberedSheetsOverTwentyFiveThousandRows() throws Exception {
+        Path inDir = tempDir.resolve("large_in");
+        Path out = tempDir.resolve("large_out.xlsx");
+        Files.createDirectories(inDir);
+        writeXlsxWithRowCount(inDir.resolve("big.xlsx"), "ColA", 25_001);
+
+        MPRCombiner.runLocalCombine(inDir, out, null, "Usage", 1, false, false, false);
+
+        try (var wb = new XSSFWorkbook(Files.newInputStream(out))) {
+            assertEquals(2, wb.getNumberOfSheets());
+            assertEquals("Usage1", wb.getSheetName(0));
+            assertEquals("Usage2", wb.getSheetName(1));
+            assertEquals(25_000, wb.getSheetAt(0).getLastRowNum());
+            assertEquals(1, wb.getSheetAt(1).getLastRowNum());
+        }
     }
 
     @Test
@@ -233,15 +300,26 @@ public class MPRCombinerTest {
 
         writeXlsx(inDir.resolve("a.xlsx"), new String[]{"ColA"}, new String[][]{{"V1"}});
 
-        MPRCombiner.main(new String[]{
-                "--input", inDir.toString(),
-                "--output", out.toString()
-        });
+        MPRCombiner.runLocalCombine(inDir, out, null, "Usage", 1, false, false, false);
 
         try (var wb = new XSSFWorkbook(Files.newInputStream(out))) {
             var sheet = wb.getSheetAt(0);
             assertTrue(sheet.getRow(0).getCell(0).getStringCellValue().contains("ColA"));
             assertTrue(sheet.getRow(1).getCell(0).getStringCellValue().contains("V1"));
+        }
+    }
+
+    private static void writeXlsxWithRowCount(Path path, String column, int dataRows) throws IOException {
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            var sheet = wb.createSheet("Usage");
+            var headerRow = sheet.createRow(0);
+            headerRow.createCell(0).setCellValue(column);
+            for (int r = 0; r < dataRows; r++) {
+                sheet.createRow(r + 1).createCell(0).setCellValue("R" + r);
+            }
+            try (OutputStream os = Files.newOutputStream(path)) {
+                wb.write(os);
+            }
         }
     }
 
@@ -273,4 +351,3 @@ public class MPRCombinerTest {
         }
     }
 }
-
